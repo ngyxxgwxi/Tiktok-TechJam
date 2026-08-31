@@ -9,18 +9,19 @@ Our goal was to build a low-latency, dynamic search agent that:
 3. Delivers high-precision retrieval using hybrid BM25 + FAISS search backed by lightweight semantic reranking.
 
 Our system is engineered around Four Core Algorithmic Pillars:
-🧠 Pillar I: Dual-Track Intent Classification & Hybrid Retrieval
+
+Pillar I: Dual-Track Intent Classification & Hybrid Retrieval
 - Dynamic Intent Track: Automatically classifies user state into Browsing Track (high semantic exploration) or Buying Track (high constraint specificity).
 - Sparse + Dense Fusion: Combines BM25 (sparse keyword match on title, features, and categories) with FAISS (dense vector similarity using all-MiniLM-L6-v2 embeddings).
 - Reciprocal Rank Fusion (RRF): Dynamically shifts fusion weights based on intent track (e.g., giving higher BM25 weight to precise buying terms).
 
-🔄 Pillar II & III: Dynamic Context Programming & State Tracking
+Pillar II & III: Dynamic Context Programming & State Tracking
 - Incremental Slot Accumulation: Tracks context (brand, gender, price, category) across multi-turn interactions.
 - Slot Rewriting / Intent Override: Detects user mind-changes (e.g., handling keywords like "instead", "actually") and flushes conflicting slots seamlessly.
 - Proactive Guidance Cut-off: Detects candidate pool overload (Over-Generality) on broad queries and proactively generates structured clarification questions to reduce MTTC.
 - Context Deduplication: Cleans and deduplicates accumulated query slots before execution, maintaining optimal BM25 scoring.
 
-🎯 Pillar IV: Semantic LLM Reranking
+Pillar IV: Semantic LLM Reranking
 - Filters and re-ranks the candidate pool using strict constraint matching (penalizing brand or gender mismatches) and semantic scoring to ensure target items hit Rank 1, maximizing MRR and Hit Rate@10.
 
 Programming Language: Python 3.10+
