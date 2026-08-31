@@ -1,51 +1,89 @@
 # Tiktok-TechJam
 
-An intelligent conversational search engine built for e-commerce that dynamically routes user intents between open-ended browsing and targeted buying, tracks evolving constraints across turns, and re-ranks dense vector and sparse keyword search results to maximize retrieval accuracy (MRR & Hit Rate@10) while minimizing interaction turns (MTTC).
+# Dual-Track Hybrid Agent for Multi-Turn Conversational Commerce
 
-Standard e-commerce search engines fail in multi-turn dialogues because they treat every query independently, ignoring past context or failing to adapt when users change their minds (e.g., "Actually, I want ASICS instead of Nike"). Furthermore, open-ended user queries often return thousands of irrelevant items, leading to high Mean Turns to Conversion (MTTC).
-Our goal was to build a low-latency, dynamic search agent that:
-1. Distinguishes between exploratory browsing vs. intent-driven buying.
-2. Preserves and updates dialogue slots dynamically without token bloat.
-3. Delivers high-precision retrieval using hybrid BM25 + FAISS search backed by lightweight semantic reranking.
+An end-to-end conversational e-commerce search engine that dynamically tracks multi-turn user intent, adapts to mid-dialogue preference updates, and leverages hybrid sparse-dense retrieval backed by semantic reranking to optimize product discovery.
 
+
+## Executive Summary & Problem Statement
+
+Traditional e-commerce search engines treat every query as an isolated event. They fail in multi-turn dialogues because they cannot retain historical context, struggle to handle user mind-changes (e.g., "Actually, I want ASICS instead of Nike"), and often flood users with broad candidate pools.
+
+Our system solves this by introducing a Dual-Track Intent Routing Engine with Dynamic Context Programming. It balances open-ended exploratory browsing and constraint-driven purchasing while optimizing for high catalog recall, precision rank placement, and minimal dialogue turns.
+
+## Method & Algorithmic Architecture
+
+Our architecture operates across Four Core Technical Pillars:
+
+### Pillar I: Dual-Track Intent Classification & Hybrid Retrieval
+
+* Intent Tracks: Automatically classifies user utterances into Browsing Track (high exploration, semantic focus) or Buying Track (high constraint specificity).
+* Sparse Keyword Index (BM25): Index built using rank_bm25 (BM25Okapi) over product titles, categories, features, and text descriptions for precise keyword and model matching.
+* Dense Vector Index (FAISS): Implements cosine similarity search over IndexFlatIP using dense embeddings.
+* Reciprocal Rank Fusion (RRF): Fuses candidate streams from BM25 and FAISS dynamically using RRF scoring
+
+Track-adaptive weighting shifts toward BM25 (1.5 : 0.5) during Buying Track to enforce hard keyword constraints, and balances them (1.0 : 1.0) during Browsing Track.
+
+### Pillar II & III: Dynamic Context Programming & State Tracking
+
+* Incremental Slot Accumulation: Dynamically updates dialogue state slots across turns (gender, brand, category, max_price, color).
+* Slot Rewriting / Intent Override: Detects preference shifts (keywords: "instead", "actually", "change to") and flushes conflicting slots seamlessly.
+* Proactive Guidance Cutoff: Monitors candidate pool volume. If candidate count exceeds the over-generality threshold during exploratory phases, the agent generates structured clarification prompts to lower MTTC.
+* Query Deduplication: Cleans and normalizes accumulated slot history prior to sparse retrieval to eliminate token redundancy and preserve BM25 scoring fidelity.
+
+### Pillar IV: Constraint-Aware LLM Reranking
+
+Reranks the top 50 fused candidates through zero-shot semantic matching and hard-constraint validation. Applies multiplicative penalty multipliers for brand, gender, or budget mismatches to elevate exact product matches to Rank 1.
+
+
+## Model Choice & Technical Rationale
+
+* Dense Text Encoder: `sentence-transformers/all-MiniLM-L6-v2`
+Rationale: Maps catalog items into a 384-dimensional dense vector space. Chosen for its fast inference speed and high performance on semantic similarity benchmarks under low latency constraints.
+* Dense Vector Index: `faiss-cpu` (`IndexFlatIP`)
+Rationale: Provides high-throughput, inner-product similarity search for dense vector recall.
+* Sparse Retriever: `rank_bm25` (`BM25Okapi`)
+Rationale: In-memory lexical search engine providing keyword matching for product titles, brands, and SKUs.
+* State Tracking & Reranker: Custom Rule-Informed LLM Reranker
+Rationale: Combines structured constraint validation with semantic keyword alignment to score and sort candidates without model API latency bottlenecks.
+
+---
+
+## Evaluation & Benchmark Metrics
+
+The system is evaluated against three core operational metrics:
+
+1. Coverage (Hit Rate@K): Measures catalog recall and boundary capability during retrieval stage.
+2. Precision (MRR / Top-K Hit Rate): Measures the system's accuracy in placing the target purchased item at Rank 1.
+3. Efficiency (MTTC - Mean Turns to Conversion): Tracks average interaction turns required to complete product selection, heavily rewarding proactive guidance that minimizes user cognitive load.
+
+### Benchmark Output Summary
+==========================================================
  FINAL OFFICIAL SYSTEM METRICS SUMMARY
- 1. Coverage (Hit Rate@10): 100.00%  (2/2)
+==========================================================
+ 1. Coverage (Hit Rate@10): 100.00%  (2/2 Sessions)
  2. Precision (MRR@10): 1.0000
- 3. Efficiency (MTTC): 2.50 Turns to Conversion
+ 3. Efficiency (MTTC): 2.00 Turns to Conversion
+==========================================================
 
-Our system is engineered around Four Core Algorithmic Pillars:
+## Tech Stack & Dependencies
+* Language: Python 3.10+
+* Frameworks & Libraries: sentence-transformers, faiss-cpu, rank_bm25, numpy, torch
+* Data Format: Amazon Reviews 2023 Dataset (Clothing, Shoes & Jewelry catalog JSONL schema)
 
-Pillar I: Dual-Track Intent Classification & Hybrid Retrieval
-- Dynamic Intent Track: Automatically classifies user state into Browsing Track (high semantic exploration) or Buying Track (high constraint specificity).
-- Sparse + Dense Fusion: Combines BM25 (sparse keyword match on title, features, and categories) with FAISS (dense vector similarity using all-MiniLM-L6-v2 embeddings).
-- Reciprocal Rank Fusion (RRF): Dynamically shifts fusion weights based on intent track (e.g., giving higher BM25 weight to precise buying terms).
+## Installation & Running the Pipeline
 
-Pillar II & III: Dynamic Context Programming & State Tracking
-- Incremental Slot Accumulation: Tracks context (brand, gender, price, category) across multi-turn interactions.
-- Slot Rewriting / Intent Override: Detects user mind-changes (e.g., handling keywords like "instead", "actually") and flushes conflicting slots seamlessly.
-- Proactive Guidance Cut-off: Detects candidate pool overload (Over-Generality) on broad queries and proactively generates structured clarification questions to reduce MTTC.
-- Context Deduplication: Cleans and deduplicates accumulated query slots before execution, maintaining optimal BM25 scoring.
-
-Pillar IV: Semantic LLM Reranking
-- Filters and re-ranks the candidate pool using strict constraint matching (penalizing brand or gender mismatches) and semantic scoring to ensure target items hit Rank 1, maximizing MRR and Hit Rate@10.
-
-Programming Language: Python 3.10+
-Environment: Google Colab
-Vector Indexing & Retrieval: FAISS (faiss-cpu)
-Keyword Indexing: rank_bm25 (BM25Okapi)
-Embeddings Model: HuggingFace sentence-transformers (all-MiniLM-L6-v2)
-Data Processing & Handling: NumPy, JSONL / Amazon Reviews 2023 Dataset (Clothing, Shoes & Jewelry)
-
-How to Run?
-# 1. Clone the repository
+# 1. Clone repository
 git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
 cd YOUR_REPO_NAME
-# 2. Install required packages
-pip install rank-bm25 faiss-cpu sentence-transformers numpy
-# 3. Run the notebook or evaluation script
+
+# 2. Install dependencies
+pip install rank-bm25 faiss-cpu sentence-transformers numpy torch
+
+# 3. Execute the interactive pipeline and evaluation suite
 python agent.py
 
-Limitations & Future Work
-- Cross-Encoder Reranking: In future iterations, we plan to fine-tune a local cross-encoder model to capture micro-level attribute semantics (e.g., sole thickness, specific shoe arch support).
-- Multi-Modal Retrieval: Incorporating product image embeddings (CLIP) alongside text metadata to handle visual search queries.
-- GPU Acceleration: Scaling vector indexing from faiss-cpu to GPU clusters for real-time sub-millisecond retrieval across million-scale product catalogs.
+## Limitations & Future Work
+* Fine-Tuned Cross-Encoders: Integrating a micro-tuned cross-encoder model to capture nuanced product specifications (e.g., shoe arch support, material composition).
+* Multi-Modal Vector Search: Incorporating vision-language models (e.g., CLIP) to execute joint visual and textual candidate retrieval.
+* GPU Index Acceleration: Scaling FAISS vector search to GPU clusters (faiss-gpu) for millisecond retrieval across multi-million product catalogs.
